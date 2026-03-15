@@ -1,7 +1,10 @@
+from elementpath import select
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from jobspy import scrape_jobs
 from dotenv import load_dotenv
+
+from backend.models.users import plan
 from .agent import generate_cover_letter, generate_message_to_recruiter
 from backend.models.engine import SessionDep, create_db_and_tables
 from backend.authentication import login as auth_login, register as auth_register
@@ -637,6 +640,22 @@ async def refresh_token(request: RefreshTokenRequest):
     # This is a placeholder. You would need to implement logic to verify the refresh token,
     # check its validity, and issue a new access token.
     return {"token": "new_access_token", "refresh_token": "new_refresh_token"}
+
+@app.get('/api/getplans')
+async def get_plans(session: SessionDep):
+    """Retrieve all available plans."""
+    statement = select(plan)
+    plans = session.exec(statement).all()
+    return {"plans": plans}
+
+@app.post('/api/plans')
+async def create_plan(name: str, price: float, features: str, session: SessionDep):
+    """Create a new subscription plan."""
+    new_plan = plan(name=name, price=price, features=features)
+    session.add(new_plan)
+    session.commit()
+    session.refresh(new_plan)
+    return {"plan": new_plan}
 
 
 
