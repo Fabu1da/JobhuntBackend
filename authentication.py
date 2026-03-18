@@ -1,8 +1,5 @@
-import token
-
 from fastapi import HTTPException
-from pyparsing import Optional
-from traitlets import Any, Dict
+from typing import Optional, Any, Dict
 from bcrypt import hashpw, gensalt, checkpw
 from sqlmodel import select, Session
 from jwt import encode, decode

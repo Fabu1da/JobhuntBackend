@@ -1,73 +1,30 @@
 from elementpath import select
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from jobspy import scrape_jobs
 from dotenv import load_dotenv
 
+from backend.ai_prompts.prompts import generate_evaluation_prompt
 from backend.models.users import plan
 from .agent import generate_cover_letter, generate_message_to_recruiter
 from backend.models.engine import SessionDep, create_db_and_tables
 from backend.authentication import login as auth_login, register as auth_register
+from backend.schemas import ScoreRequest, BatchScoreRequest, AnalyzeCvRequest
+
+from backend.ai_prompts.prompts import CV_ANALYSIS_PROMPT, CV_VISION_PROMPT
+from backend.types.types import LoginRequest, RegisterRequest, RefreshTokenRequest, PlanRequest
 
 
 import httpx
 import os
 import re
 import json
-from pydantic import BaseModel
-from typing import Annotated, List, Optional
 
 # Load environment variables from .env file
 load_dotenv()
 
-
-
-class Profile(BaseModel):
-    name: str
-    title: str
-    experience: str
-    skills: List[str]
-    education: str
-    location: str
-    summary: str
-
-
-class JobData(BaseModel):
-    id: str
-    title: str
-    company: Optional[str] = None
-    location: Optional[str] = None
-    description: Optional[str] = None
-
-
-class ScoreRequest(BaseModel):
-    profile: Profile
-    job: JobData
-
-
-class BatchScoreRequest(BaseModel):
-    profile: Profile
-    jobs: List[JobData]
-
-
-class AnalyzeCvRequest(BaseModel):
-    cv_text: str
-    pdf_images: Optional[List[str]] = None  # Base64 encoded PNG images of PDF pages
-
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str
-
-
-class RegisterRequest(BaseModel):
-    username: str
-    password: str
-    email: str
-
+api_key = os.environ.get('OPENAI_API_KEY', '')
+model = os.environ.get('model', '')
 
 app = FastAPI()
 app.add_middleware(
@@ -82,44 +39,6 @@ app.add_middleware(
 def on_startup():
     create_db_and_tables()
 
-
-
-CV_ANALYSIS_PROMPT = """Analyze this CV/Resume and extract a structured profile.
-
-CV TEXT:
-{cv_text}
-
-For skills: Extract ONLY the skills, technologies, languages, tools, and frameworks explicitly mentioned in the CV text. Do NOT infer or assume skills - only include what is directly stated.
-
-Respond ONLY with valid JSON in this exact format:
-{{
-  "name": "Full Name",
-  "title": "Current/Target Job Title (e.g. Full-Stack Developer)",
-  "experience": "X years of experience in Y",
-  "skills": ["skill1", "skill2", "skill3", "skill4", "skill5", ...],
-  "education": "Highest degree and field",
-  "location": "City, Country",
-  "summary": "2-3 sentence professional summary highlighting key strengths"
-}}"""
-
-CV_VISION_PROMPT = """Analyze this CV/Resume image and extract a structured profile. Extract all information visible in the document.
-
-For skills: Extract ONLY the skills, technologies, languages, tools, and frameworks explicitly shown in the CV image. Do NOT infer or assume skills - only include what is directly visible or stated.
-
-Respond ONLY with valid JSON in this exact format:
-{
-  "name": "Full Name",
-  "title": "Current/Target Job Title (e.g. Full-Stack Developer)",
-  "experience": "X years of experience in Y (be specific about total years)",
-  "skills": ["skill1", "skill2", "skill3", "skill4", "skill5", ...],
-  "education": "Highest degree and field",
-  "location": "City, Country",
-  "summary": "2-3 sentence professional summary highlighting key strengths"
-}"""
-
-
-api_key = os.environ.get('OPENAI_API_KEY', '')
-model = os.environ.get('model', '')
 @app.get('/api/jobs')
 def get_jobs(query: str = "full stack developer python", location: str = "Germany", results: int = 20):
     print(f"\n=== GET JOBS REQUEST ===")
@@ -297,58 +216,8 @@ async def score_job(request: ScoreRequest):
     profile = request.profile
     job = request.job
     
-    profile_text = f"""Name: {profile.name}
-Title: {profile.title}
-Experience: {profile.experience}
-Skills: {', '.join(profile.skills)}
-Education: {profile.education}
-Location: {profile.location}
-Summary: {profile.summary}"""
 
-    prompt = f"""You are evaluating a job listing for a candidate. Score the match from 0-100 and give a 1-2 sentence summary of why.
 
-CANDIDATE PROFILE:
-{profile_text}
-
-JOB LISTING:
-Title: {job.title}
-Company: {job.company or 'Unknown'}
-Location: {job.location or 'Not specified'}
-Description: {(job.description or 'No description available')[:800]}
-
-For matched_skills: List skills from the candidate profile that are mentioned in or relevant to the job description.
-For missing_skills: List skills required by the job that the candidate does NOT have.
-
-IMPORTANT: Normalize skill names when matching. Treat these as the SAME skill:
-- React, ReactJS, React.js
-- Python, Python3, Py
-- TypeScript, TS
-- JavaScript, JS
-- Node.js, Node, NodeJS
-- Angular.js, Angular
-- Vue.js, Vue
-- C#, CSharp, C Sharp, Csharp
-- C++, Cpp, C plus plus
-- Azure, Microsoft Azure, Azure Cloud
-- AWS, Amazon Web Services
-- GCP, Google Cloud
-- Docker, Containerization
-- Kubernetes, K8s
-- PostgreSQL, Postgres, PG
-- MySQL, MySQL Database
-- MongoDB, Mongo, NoSQL
-- LLM, Large Language Model, AI, Artificial Intelligence, Machine Learning, ML, Deep Learning
-- REST, RESTful API, REST API
-- GraphQL, Graph QL
-- Django, Django REST Framework, DRF
-- FastAPI, Fast API
-- Express, Express.js, ExpressJS
-- Git, GitHub, Version Control
-- Docker, Containerization, Container, Containers
-- Etc. - Be flexible and match similar technologies and frameworks.
-
-Respond ONLY with valid JSON in this exact format:
-{{"score": 75, "summary": "Strong match because...", "matched_skills": ["skill1", "skill2", ...], "missing_skills": ["skill3", "skill4", ...]}}"""
 
     try:
         async with httpx.AsyncClient() as client:
@@ -361,7 +230,7 @@ Respond ONLY with valid JSON in this exact format:
                 json={
                     "model": model,
                     "max_tokens": 1000,
-                    "messages": [{"role": "user", "content": prompt}]
+                    "messages": [{"role": "user", "content": generate_evaluation_prompt(profile, job)}]
                 },
                 timeout=30.0
             )
@@ -649,9 +518,9 @@ async def get_plans(session: SessionDep):
     return {"plans": plans}
 
 @app.post('/api/plans')
-async def create_plan(name: str, price: float, features: str, session: SessionDep):
+async def create_plan(request: PlanRequest, session: SessionDep):
     """Create a new subscription plan."""
-    new_plan = plan(name=name, price=price, features=features)
+    new_plan = plan(name=request.name, price=request.price, features=request.features)
     session.add(new_plan)
     session.commit()
     session.refresh(new_plan)

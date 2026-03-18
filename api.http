@@ -16,3 +16,13 @@ Content-Type: application/json
     "email": "newuser@example.com",
     "password": "newpassword"
 }
+
+###
+POST  http://127.0.0.1:8000/api/plans
+Content-Type: application/json
+
+{
+    "name": "LifeTime Plan",
+    "price": 99.99,
+    "features": "Feature 1, Feature 2"
+}
