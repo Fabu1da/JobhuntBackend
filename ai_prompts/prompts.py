@@ -1,7 +1,7 @@
 from backend.schemas import JobData, Profile
 
 
-def generate_evaluation_prompt(profile: Profile, job: JobData) -> str:
+def evaluation_jobs(profile: Profile, jobs: list[JobData]) -> str:
 
     profile_text = f"""Name: {profile.name}
     Title: {profile.title}
@@ -10,20 +10,23 @@ def generate_evaluation_prompt(profile: Profile, job: JobData) -> str:
     Education: {profile.education}
     Location: {profile.location}
     Summary: {profile.summary}"""
-    
-    prompt = f"""You are evaluating a job listing for a candidate. Score the match from 0-100 and give a 1-2 sentence summary of why.
+
+    jobs_text = "\n\n".join([
+        f"JOB {i+1} (ID: {job.id}):\nTitle: {job.title}\nCompany: {job.company or 'Unknown'}\nLocation: {job.location or 'Not specified'}\nDescription: {(job.description or 'No description')[:400]}"
+        for i, job in enumerate(jobs)
+    ])
+
+    prompt = f"""You are evaluating multiple job listings for a candidate. For EACH job, score the match from 0-100 and give a brief summary.
 
     CANDIDATE PROFILE:
     {profile_text}
 
-    JOB LISTING:
-    Title: {job.title}
-    Company: {job.company or 'Unknown'}
-    Location: {job.location or 'Not specified'}
-    Description: {(job.description or 'No description available')[:800]}
+    JOB LISTINGS:
+    {jobs_text}
 
-    For matched_skills: List skills from the candidate profile that are mentioned in or relevant to the job description.
-    For missing_skills: List skills required by the job that the candidate does NOT have.
+    For each job:
+    - matched_skills: List skills from the candidate profile that are mentioned in or relevant to the job description.
+    - missing_skills: List skills required by the job that the candidate does NOT have.
 
     IMPORTANT: Normalize skill names when matching. Treat these as the SAME skill:
     - React, ReactJS, React.js
@@ -53,10 +56,26 @@ def generate_evaluation_prompt(profile: Profile, job: JobData) -> str:
     - Docker, Containerization, Container, Containers
     - Etc. - Be flexible and match similar technologies and frameworks.
 
-    Respond ONLY with valid JSON in this exact format:
-    {{"score": 75, "summary": "Strong match because...", "matched_skills": ["skill1", "skill2", ...], "missing_skills": ["skill3", "skill4", ...]}}"""
+
+
+    Analyze the following job description and include in your evaluation:
+
+    Verdict — Strong match / Decent match / Borderline / Skip — in one sentence
+    Strong matches — skills and experience that directly align
+    Gaps — missing skills or experience, noting if critical or minor
+    Hard blockers — anything that makes applying pointless (German required, wrong stack, wrong level)
+    What makes Fabien stand out — unique advantages for this specific role
+    Salary target — suggested range based on role and company type
+    Recommendation — apply, skip, or apply later with reasoning
+
+    Respond ONLY with a valid JSON array containing one object per job in this exact format:
+    [{{"id": "job_id", "score": 75, "summary": "Strong match because...", "Verdict": "Strong match", "Gaps": "Missing skills...", "Hard blockers": "Requirements not met...", "What makes Fabien stand out": "Unique qualifications...", "Salary target": "$X - $Y", "Recommendation": "Apply, skip, or apply later with reasoning"}}, ...]
+
+    IMPORTANT: Return scores for ALL jobs in the same order. Use the exact job IDs provided."""
 
     return prompt
+
+
 
 
 

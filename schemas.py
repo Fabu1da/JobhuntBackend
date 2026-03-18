@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 
 
@@ -33,3 +33,46 @@ class BatchScoreRequest(BaseModel):
 class AnalyzeCvRequest(BaseModel):
     cv_text: str
     pdf_images: Optional[List[str]] = None  # Base64 encoded PNG images of PDF pages
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    email: str
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class PlanRequest(BaseModel):
+    name: str
+    price: float
+    features: str
+
+
+class SubscribeRequest(BaseModel):
+    user_id: int
+    plan_id: int
+    start_date: str
+    end_date: str
+
+
+class JobEvaluation(BaseModel):
+    id: str
+    score: int
+    summary: str
+    Verdict: str
+    Gaps: str
+    Hard_blockers: str = Field(alias="Hard blockers")
+    What_makes_Fabien_stand_out: str = Field(alias="What makes Fabien stand out")
+    Salary_target: str = Field(alias="Salary target")
+    Recommendation: str
+    
+    class Config:
+        populate_by_name = True  # Allow both alias and field name

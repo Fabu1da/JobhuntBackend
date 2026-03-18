@@ -22,7 +22,23 @@ POST  http://127.0.0.1:8000/api/plans
 Content-Type: application/json
 
 {
-    "name": "LifeTime Plan",
-    "price": 99.99,
+    "name": "Basic Plan",
+    "price": 9.99,
     "features": "Feature 1, Feature 2"
+}
+
+
+###
+GET http://127.0.0.1:8000/api/getplans
+Content-Type: application/json
+
+###
+POST http://127.0.0.1:8000/api/subscribe
+Content-Type: application/json
+
+{
+    "user_id": 1,
+    "plan_id": 1,
+    "start_date": "2023-01-01",
+    "end_date": "2024-01-01"
 }

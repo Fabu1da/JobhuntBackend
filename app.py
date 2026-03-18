@@ -1,18 +1,16 @@
-from elementpath import select
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from jobspy import scrape_jobs
 from dotenv import load_dotenv
+from sqlmodel import select
 
-from backend.ai_prompts.prompts import generate_evaluation_prompt
 from backend.models.users import plan
 from .agent import generate_cover_letter, generate_message_to_recruiter
 from backend.models.engine import SessionDep, create_db_and_tables
-from backend.authentication import login as auth_login, register as auth_register
-from backend.schemas import ScoreRequest, BatchScoreRequest, AnalyzeCvRequest
+from backend.authentication import login as auth_login, register as auth_register, subscribe
+from backend.schemas import ScoreRequest, BatchScoreRequest, AnalyzeCvRequest, LoginRequest, RegisterRequest, RefreshTokenRequest, PlanRequest, SubscribeRequest, JobEvaluation
 
-from backend.ai_prompts.prompts import CV_ANALYSIS_PROMPT, CV_VISION_PROMPT
-from backend.types.types import LoginRequest, RegisterRequest, RefreshTokenRequest, PlanRequest
+from backend.ai_prompts.prompts import CV_ANALYSIS_PROMPT, CV_VISION_PROMPT, evaluation_jobs
 
 
 import httpx
@@ -230,7 +228,7 @@ async def score_job(request: ScoreRequest):
                 json={
                     "model": model,
                     "max_tokens": 1000,
-                    "messages": [{"role": "user", "content": generate_evaluation_prompt(profile, job)}]
+                    "messages": [{"role": "user", "content": evaluation_jobs(profile, [job])}]
                 },
                 timeout=30.0
             )
@@ -238,12 +236,15 @@ async def score_job(request: ScoreRequest):
             print(f"Status: {res.status_code}")
             data = res.json()
             print(f"Response data: {json.dumps(data, indent=2)[:500]}")
-            text = data.get("choices", [{}])[0].get("message", {}).get("content", '{"score": 50, "summary": "Unable to evaluate."}')
+            text = data.get("choices", [{}])[0].get("message", {}).get("content", '[{"score": 50, "summary": "Unable to evaluate."}]')
             print(f"Extracted text: {text[:200]}")
             clean = re.sub(r'```json|```', '', text).strip()
             print(f"Cleaned text: {clean[:200]}")
-            result = json.loads(clean)
-            print(f"Parsed result: {result}")
+            raw_result = json.loads(clean)
+            # Validate with Pydantic (extract first result from array)
+            validated = JobEvaluation(**raw_result[0] if isinstance(raw_result, list) else raw_result)
+            result = validated.model_dump()
+            print(f"Parsed and validated result: {result}")
             return result
     except Exception as e:
         print(f"\n=== ERROR SCORING JOB ===")
@@ -259,73 +260,10 @@ async def score_jobs_batch(request: BatchScoreRequest):
     """Score multiple jobs in a single API call"""
     profile = request.profile
     jobs = request.jobs
-    
-    profile_text = f"""Name: {profile.name}
-Title: {profile.title}
-Experience: {profile.experience}
-Skills: {', '.join(profile.skills)}
-Education: {profile.education}
-Location: {profile.location}
-Summary: {profile.summary}"""
-
-    jobs_text = "\n\n".join([
-        f"JOB {i+1} (ID: {job.id}):\nTitle: {job.title}\nCompany: {job.company or 'Unknown'}\nLocation: {job.location or 'Not specified'}\nDescription: {(job.description or 'No description')[:400]}"
-        for i, job in enumerate(jobs)
-    ])
-
-    prompt = f"""You are evaluating multiple job listings for a candidate. For EACH job, score the match from 0-100 and give a brief summary.
-
-CANDIDATE PROFILE:
-{profile_text}
-
-JOB LISTINGS:
-{jobs_text}
-
-For each job:
-- matched_skills: List skills from the candidate profile that are mentioned in or relevant to the job description.
-- missing_skills: List skills required by the job that the candidate does NOT have.
-
-IMPORTANT: Normalize skill names when matching. Treat these as the SAME skill:
-- React, ReactJS, React.js
-- Python, Python3, Py
-- TypeScript, TS
-- JavaScript, JS
-- Node.js, Node, NodeJS
-- Angular.js, Angular
-- Vue.js, Vue
-- C#, CSharp, C Sharp, Csharp
-- C++, Cpp, C plus plus
-- Azure, Microsoft Azure, Azure Cloud
-- AWS, Amazon Web Services
-- GCP, Google Cloud
-- Docker, Containerization
-- Kubernetes, K8s
-- PostgreSQL, Postgres, PG
-- MySQL, MySQL Database
-- MongoDB, Mongo, NoSQL
-- LLM, Large Language Model, AI, Artificial Intelligence, Machine Learning, ML, Deep Learning
-- REST, RESTful API, REST API
-- GraphQL, Graph QL
-- Django, Django REST Framework, DRF
-- FastAPI, Fast API
-- Express, Express.js, ExpressJS
-- Git, GitHub, Version Control
-- Docker, Containerization, Container, Containers
-- Etc. - Be flexible and match similar technologies and frameworks.
-
-Respond ONLY with a valid JSON array containing one object per job in this exact format:
-[{{"id": "job_id", "score": 75, "summary": "Strong match because...", "matched_skills": ["skill1", "skill2", ...], "missing_skills": ["skill3", "skill4", ...]}}, ...]
-
-IMPORTANT: Return scores for ALL jobs in the same order. Use the exact job IDs provided."""
 
     try:
         async with httpx.AsyncClient() as client:
             print(f"\n=== BATCH SCORE REQUEST ===")
-            print(f"Model: {model}")
-            print(f"API Key present: {bool(api_key)}")
-            print(f"Number of jobs: {len(jobs)}")
-            print(f"Prompt length: {len(prompt)}")
-            print(f"First 500 chars of prompt: {prompt[:500]}")
             
             res = await client.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -336,7 +274,7 @@ IMPORTANT: Return scores for ALL jobs in the same order. Use the exact job IDs p
                 json={
                     "model": model,
                     "max_tokens": 4000,
-                    "messages": [{"role": "user", "content": prompt}]
+                    "messages": [{"role": "user", "content": evaluation_jobs(profile, jobs)}]
                 },
                 timeout=120.0
             )
@@ -355,8 +293,10 @@ IMPORTANT: Return scores for ALL jobs in the same order. Use the exact job IDs p
             clean = re.sub(r'```json|```', '', text).strip()
             print(f"After cleanup: {clean[:300]}")
             
-            scores = json.loads(clean)
-            print(f"Parsed {len(scores)} scores successfully")
+            raw_scores = json.loads(clean)
+            # Validate each score with Pydantic
+            scores = [JobEvaluation(**score).model_dump() for score in raw_scores]
+            print(f"Parsed and validated {len(scores)} scores successfully")
 
             
             # Create a dict for quick lookup
@@ -526,7 +466,12 @@ async def create_plan(request: PlanRequest, session: SessionDep):
     session.refresh(new_plan)
     return {"plan": new_plan}
 
-
+@app.post('/api/subscribe')
+async def subscribe_endpoint(request: SubscribeRequest, session: SessionDep):
+    """Subscribe a user to a plan."""
+    print(f"Subscribing user {request.user_id} to plan {request.plan_id}")
+    response = subscribe(session, request.user_id, request.plan_id, request.start_date, request.end_date)
+    return response
 
 if __name__ == '__main__':
     import uvicorn

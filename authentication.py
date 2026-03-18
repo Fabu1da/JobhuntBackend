@@ -29,7 +29,7 @@ async def isSubscriptionActive(session: Session, user_id: int) -> Optional[Dict[
     
     return {
         "is_active": start_date <= current_date <= end_date,
-        "plan": user_subscription.plan,
+        "plan_id": user_subscription.plan_id,
         "start_date": user_subscription.start_date,
         "end_date": user_subscription.end_date
     }
@@ -145,10 +145,13 @@ def refresh_token(refresh_token: str):
         return {"token": token, "refresh_token": refresh_token}
 
 
-def subscribe(session: Session, user_id: int, plan: str, start_date: str, end_date: str):
+def subscribe(session: Session, user_id: int, plan_id: int, start_date: str, end_date: str):
     """Subscribe a user to a plan."""
     """ Payment processing logic would go here (e.g., integrating with Stripe or PayPal) """
-    new_subscription = subscription(user_id=user_id, plan=plan, start_date=start_date, end_date=end_date)
+
+    print(f"Subscribing user {user_id} to plan {plan_id} from {start_date} to {end_date}")
+
+    new_subscription = subscription(user_id=user_id, plan_id=plan_id, start_date=start_date, end_date=end_date)
     session.add(new_subscription)
     session.commit()
     session.refresh(new_subscription)
