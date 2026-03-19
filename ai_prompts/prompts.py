@@ -64,14 +64,14 @@ def evaluation_jobs(profile: Profile, jobs: list[JobData]) -> str:
     Strong matches — skills and experience that directly align
     Gaps — missing skills or experience, noting if critical or minor
     Hard blockers — anything that makes applying pointless (German required, wrong stack, wrong level)
-    What makes Fabien stand out — unique advantages for this specific role
+    Stand out — unique advantages for this specific role
     Salary target — suggested range based on role and company type
     Recommendation — apply, skip, or apply later with reasoning
 
     Respond ONLY with a valid JSON array containing one object per job in this exact format:
-    [{{"id": "job_id", "score": 75, "summary": "Strong match because...", "Verdict": "Strong match", "Gaps": "Missing skills...", "Hard blockers": "Requirements not met...", "What makes Fabien stand out": "Unique qualifications...", "Salary target": "$X - $Y", "Recommendation": "Apply, skip, or apply later with reasoning"}}, ...]
+    [{{"id": "job_id", "score": 75, "summary": "Strong match because...", "Verdict": "Strong match", "matched_skills": "["skill1", "skill2", ...]", "missing_skills": "["skill3", "skill4", ...]", "Gaps": "Missing skills...",  "Hard blockers": "Requirements not met...", "Stand out": "Unique qualifications...", "Salary target": "X - Y", "Recommendation": "Apply, skip, or apply later with reasoning"}}, ...]
 
-    IMPORTANT: Return scores for ALL jobs in the same order. Use the exact job IDs provided."""
+    IMPORTANT: Return scores for ALL jobs in the same order. Use the exact job IDs provided. Make sure matched_skills and missing_skills are JSON arrays, not strings."""
 
     return prompt
 

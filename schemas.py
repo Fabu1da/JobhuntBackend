@@ -69,10 +69,14 @@ class JobEvaluation(BaseModel):
     summary: str
     Verdict: str
     Gaps: str
-    Hard_blockers: str = Field(alias="Hard blockers")
-    What_makes_Fabien_stand_out: str = Field(alias="What makes Fabien stand out")
-    Salary_target: str = Field(alias="Salary target")
-    Recommendation: str
+    Hard_blockers: Optional[str] = Field(None, alias="Hard blockers")
+    Stand_out: Optional[str] = Field(None, alias="What makes your cv stand out")
+    Salary_target: Optional[str] = Field(None, alias="Salary target")
+    Recommendation: Optional[str] = None
+    # Allow extra fields from LLM (matched_skills, missing_skills, etc.)
+    matched_skills: Optional[List[str]] = None
+    missing_skills: Optional[List[str]] = None
     
     class Config:
         populate_by_name = True  # Allow both alias and field name
+        extra = "allow"  # Allow extra fields from LLM response

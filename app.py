@@ -288,10 +288,10 @@ async def score_jobs_batch(request: BatchScoreRequest):
             
             text = data.get("choices", [{}])[0].get("message", {}).get("content", '[]')
             print(f"Response content length: {len(text)}")
-            print(f"First 300 chars: {text[:300]}")
+            print(f"First 300 chars: {text}")
             
             clean = re.sub(r'```json|```', '', text).strip()
-            print(f"After cleanup: {clean[:300]}")
+            print(f"After cleanup: {clean}")
             
             raw_scores = json.loads(clean)
             # Validate each score with Pydantic
