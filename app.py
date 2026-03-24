@@ -24,6 +24,7 @@ load_dotenv()
 api_key = os.environ.get('OPENAI_API_KEY', '')
 model = os.environ.get('model', '')
 
+
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
@@ -38,18 +39,14 @@ def on_startup():
     create_db_and_tables()
 
 @app.get('/api/jobs')
-def get_jobs(query: str = "full stack developer python", location: str = "Germany", results: int = 20):
-    print(f"\n=== GET JOBS REQUEST ===")
-    print(f"Query: {query}")
-    print(f"Location: {location}")
-    print(f"Results wanted: {results}")
+async def get_jobs(query: str, location: str, results: int, posted_within_hours: int):
     
     search_term = query
     location = location
     results_wanted = results
 
-    sites = ['linkedin', 'indeed', 'glassdoor', 'google']
-
+    sites = ['indeed', 'linkedin', 'glassdoor', 'google', 'bayt']  
+    
     try:
         print(f"Scraping jobs from: {sites}")
         jobs = scrape_jobs(
@@ -57,14 +54,41 @@ def get_jobs(query: str = "full stack developer python", location: str = "German
             search_term=search_term,
             location=location,
             results_wanted=results_wanted,
-            hours_old=72,
-            country_indeed='Germany',
+            hours_old=posted_within_hours,
+            country_indeed=location,
+            description_format='markdown',
+            linkedin_fetch_description=True,
+            proxies=None,
+            ca_cert=None,
+            verbose=1
+
         )
+
+        print(jobs.head(2))  # Print first 2 jobs for debugging
         
         print(f"Successfully scraped {len(jobs)} jobs")
-
+        
+        # Log detailed info about scraped jobs
+        if len(jobs) > 0:
+            print(f"Available columns: {jobs.columns.tolist()}")
+            print(f"\n=== FIRST JOB DETAILS ===")
+            first_job = jobs.iloc[0]
+            for col in jobs.columns:
+                value = first_job.get(col, '')
+                if col == 'description':
+                    print(f"{col}: {str(value)[:100]}... (length: {len(str(value))})")
+                else:
+                    print(f"{col}: {value}")
+            
         jobs_list = []
         for _, row in jobs.iterrows():
+            # Clean description: handle None, nan, and other null values
+            desc = row.get('description', '')
+            if desc is None or str(desc).lower().strip() in ['nan', 'none', '']:
+                desc = ''
+            else:
+                desc = str(desc)
+
             jobs_list.append({
                 'id': str(_),
                 'title': str(row.get('title', '')),
@@ -72,7 +96,7 @@ def get_jobs(query: str = "full stack developer python", location: str = "German
                 'location': str(row.get('location', '')),
                 'site': str(row.get('site', '')),
                 'job_url': str(row.get('job_url', '')),
-                'description': str(row.get('description', ''))[:2000],
+                'description': desc,
                 'date_posted': str(row.get('date_posted', '')),
                 'job_type': str(row.get('job_type', '')),
                 'salary_range': f"{row.get('min_amount', '')} - {row.get('max_amount', '')} {row.get('currency', '')}".strip(' -'),
@@ -257,64 +281,85 @@ async def score_job(request: ScoreRequest):
 
 @app.post('/api/scoreJobs')
 async def score_jobs_batch(request: BatchScoreRequest):
-    """Score multiple jobs in a single API call"""
+    """Score multiple jobs in batches to prevent JSON parsing errors"""
     profile = request.profile
     jobs = request.jobs
+    batch_size = 5  # Score 5 jobs per API call to keep response manageable
 
     try:
+        # Split jobs into smaller batches
+        job_batches = [jobs[i:i + batch_size] for i in range(0, len(jobs), batch_size)]
+        
+        print(f"\n=== BATCH SCORE REQUEST ===")
+        print(f"Scoring {len(jobs)} jobs in {len(job_batches)} batches of max {batch_size} jobs")
+        
+        all_scores = []
+        
         async with httpx.AsyncClient() as client:
-            print(f"\n=== BATCH SCORE REQUEST ===")
-            
-            res = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                },
-                json={
-                    "model": model,
-                    "max_tokens": 4000,
-                    "messages": [{"role": "user", "content": evaluation_jobs(profile, jobs)}]
-                },
-                timeout=120.0
-            )
-            
-            print(f"\n=== BATCH SCORE RESPONSE ===")
-            print(f"Status code: {res.status_code}")
-            data = res.json()
-            
-            if "error" in data:
-                print(f"API Error: {data['error']}")
-            
-            text = data.get("choices", [{}])[0].get("message", {}).get("content", '[]')
-            print(f"Response content length: {len(text)}")
-            print(f"First 300 chars: {text}")
-            
-            clean = re.sub(r'```json|```', '', text).strip()
-            print(f"After cleanup: {clean}")
-            
-            raw_scores = json.loads(clean)
-            # Validate each score with Pydantic
-            scores = [JobEvaluation(**score).model_dump() for score in raw_scores]
-            print(f"Parsed and validated {len(scores)} scores successfully")
-
-            
-            # Create a dict for quick lookup
-            scores_dict = {s["id"]: s for s in scores}
-            print(f"Created scores dict with keys: {list(scores_dict.keys())}")
-            
-            # Return scores in the same order as input jobs
-            result = []
-            for job in jobs:
-                if job.id in scores_dict:
-                    result.append(scores_dict[job.id])
-                    print(f"Job {job.id}: Found in scores")
-                else:
-                    result.append({"id": job.id, "score": 0, "summary": "Could not evaluate.", "matched_skills": [], "missing_skills": []})
-                    print(f"Job {job.id}: NOT found in scores, using default")
-            
-            print(f"\nFinal scored results ({len(result)} jobs): {result[:2]}...")
-            return result
+            for batch_idx, job_batch in enumerate(job_batches):
+                print(f"\nProcessing batch {batch_idx + 1}/{len(job_batches)}")
+                
+                res = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    },
+                    json={
+                        "model": model,
+                        "max_tokens": 4000,
+                        "messages": [{"role": "user", "content": evaluation_jobs(profile, job_batch)}]
+                    },
+                    timeout=120.0
+                )
+                
+                print(f"Status code: {res.status_code}")
+                data = res.json()
+                
+                if "error" in data:
+                    print(f"API Error: {data['error']}")
+                    return {"error": f"API Error in batch {batch_idx + 1}: {data['error']}"}
+                
+                text = data.get("choices", [{}])[0].get("message", {}).get("content", '[]')
+                print(f"Response content length: {len(text)}")
+                print(f"First 200 chars: {text[:200]}")
+                
+                # Clean markdown code blocks
+                clean = re.sub(r'```json|```', '', text).strip()
+                
+                try:
+                    raw_scores = json.loads(clean)
+                except json.JSONDecodeError as je:
+                    print(f"JSON Parse Error in batch {batch_idx + 1}: {str(je)}")
+                    print(f"Last 500 chars of response: {clean[-500:]}")
+                    # Return partial results with error for failed batch
+                    return {
+                        "error": f"JSON parsing failed for batch {batch_idx + 1}",
+                        "partial_scores": all_scores,
+                        "details": str(je)
+                    }
+                
+                # Validate each score with Pydantic
+                batch_scores = [JobEvaluation(**score).model_dump() for score in raw_scores]
+                print(f"Parsed and validated {len(batch_scores)} scores in this batch")
+                all_scores.extend(batch_scores)
+        
+        # Create a dict for quick lookup
+        scores_dict = {s["id"]: s for s in all_scores}
+        print(f"Created scores dict with {len(scores_dict)} total scores")
+        
+        # Return scores in the same order as input jobs
+        result = []
+        for job in jobs:
+            if job.id in scores_dict:
+                result.append(scores_dict[job.id])
+                print(f"Job {job.id}: Found in scores")
+            else:
+                result.append({"id": job.id, "score": 0, "summary": "Could not evaluate.", "matched_skills": [], "missing_skills": []})
+                print(f"Job {job.id}: NOT found in scores, using default")
+        
+        print(f"\nFinal scored results ({len(result)} jobs): {result[:2]}...")
+        return result
     except Exception as e:
         print(f"\n=== ERROR IN BATCH SCORING ===")
         print(f"Exception type: {type(e).__name__}")

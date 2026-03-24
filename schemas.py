@@ -70,7 +70,7 @@ class JobEvaluation(BaseModel):
     Verdict: str
     Gaps: str
     Hard_blockers: Optional[str] = Field(None, alias="Hard blockers")
-    Stand_out: Optional[str] = Field(None, alias="What makes your cv stand out")
+    Stand_out: Optional[str] = Field(None, alias="Stand out")
     Salary_target: Optional[str] = Field(None, alias="Salary target")
     Recommendation: Optional[str] = None
     # Allow extra fields from LLM (matched_skills, missing_skills, etc.)
