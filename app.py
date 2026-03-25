@@ -4,11 +4,11 @@ from jobspy import scrape_jobs
 from dotenv import load_dotenv
 from sqlmodel import select
 
-from backend.models.users import plan
+from backend.models.users import User, plan
 from .agent import generate_cover_letter, generate_message_to_recruiter
 from backend.models.engine import SessionDep, create_db_and_tables
-from backend.authentication import login as auth_login, register as auth_register, subscribe
-from backend.schemas import ScoreRequest, BatchScoreRequest, AnalyzeCvRequest, LoginRequest, RegisterRequest, RefreshTokenRequest, PlanRequest, SubscribeRequest, JobEvaluation
+from backend.authentication import login as auth_login, register as auth_register, subscribe, verify_token
+from backend.schemas import ScoreRequest, BatchScoreRequest, AnalyzeCvRequest, LoginRequest, RegisterRequest, RefreshTokenRequest, ValidateRequest, PlanRequest, SubscribeRequest, JobEvaluation
 
 from backend.ai_prompts.prompts import CV_ANALYSIS_PROMPT, CV_VISION_PROMPT, evaluation_jobs
 
@@ -487,6 +487,36 @@ async def register_endpoint(request: RegisterRequest, session: SessionDep):
     password = request.password
     email = request.email
     return await auth_register(session, username, password, email)
+
+@app.post('/api/validate')
+async def validate_endpoint(request: ValidateRequest, session: SessionDep):
+   
+    """Validate JWT token and return user info if valid."""
+    token = request.token 
+    if not token:
+        return {"success": False, "message": "No token provided"}
+    
+    # Verify token
+    user_id = verify_token(token)
+    
+    if not user_id:
+        return {"success": False, "message": "Invalid or expired token"}
+ 
+    statement = select(User).where(User.id == user_id)
+    user = session.exec(statement).first()
+    
+    if not user:
+        return {"success": False, "message": "User not found"}
+    
+    return {
+        "success": True,
+        "message": "Token is valid",
+        "data": {
+            "user_id": user.id,
+            "username": user.username,
+            "email": user.email
+        }
+    }
 
 @app.post('/api/refreshToken')
 async def refresh_token(request: RefreshTokenRequest):

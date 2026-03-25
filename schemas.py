@@ -50,6 +50,10 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class ValidateRequest(BaseModel):
+    token: str
+
+
 class PlanRequest(BaseModel):
     name: str
     price: float
