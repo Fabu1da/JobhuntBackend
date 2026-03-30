@@ -1,5 +1,12 @@
+import os
 from agents import Agent, ModelSettings, TResponseInputItem, Runner, RunConfig, trace
+from dotenv import load_dotenv
 from pydantic import BaseModel
+
+load_dotenv()
+
+WorkflowId = os.environ.get("work_flow_id")
+model = os.environ.get("model")
 
 jobsuche = Agent(
   name="JobSuche",
@@ -69,7 +76,7 @@ Important Rules:
 - Only use information present in the resume.
 - If the hiring manager name is not available, use \"Dear Hiring Manager\".
 - Always tailor the letter specifically to the job description.""",
-  model="gpt-4o-mini",
+  model=model,
   model_settings=ModelSettings(
     temperature=1,
     top_p=1,
@@ -108,7 +115,7 @@ async def run_workflow(workflow_input: WorkflowInput):
       ],
       run_config=RunConfig(trace_metadata={
         "__trace_source__": "agent-builder",
-        "workflow_id": "wf_69a6e7fc90bc8190a34e6cc6a583a3f906482cd9b8eb4d17"
+        "workflow_id": WorkflowId
       })
     )
 
@@ -221,7 +228,7 @@ Generate a concise and polite message expressing interest in the position and hi
     ],
     run_config=RunConfig(trace_metadata={
       "__trace_source__": "agent-builder",
-      "workflow_id": "wf_69a6e7fc90bc8190a34e6cc6a583a3f906482cd9b8eb4d17"
+      "workflow_id": WorkflowId
     })
   )
   
