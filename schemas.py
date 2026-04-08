@@ -72,12 +72,12 @@ class JobEvaluation(BaseModel):
     score: int
     summary: str
     Verdict: str
+    action: str
     Gaps: str
     Hard_blockers: Optional[str] = Field(None, alias="Hard blockers")
     Stand_out: Optional[str] = Field(None, alias="Stand out")
     Salary_target: Optional[str] = Field(None, alias="Salary target")
     Recommendation: Optional[str] = None
-    # Allow extra fields from LLM (matched_skills, missing_skills, etc.)
     matched_skills: Optional[List[str]] = None
     missing_skills: Optional[List[str]] = None
     
