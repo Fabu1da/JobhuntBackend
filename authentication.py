@@ -21,7 +21,7 @@ async def isSubscriptionActive(session: Session, user_id: int) -> Optional[Dict[
     user_subscription = session.exec(statement).first()
     
     if not user_subscription:
-        return None
+        return {"success": False, "message": "No active subscription found"}
     
     current_date = datetime.now().date()
     start_date = datetime.strptime(user_subscription.start_date, "%Y-%m-%d").date()
@@ -102,12 +102,14 @@ async def login(session: Session, username: str, password: str):
 
 async def register(session: Session, username: str, password: str, email: str):
     """Register a new user with username, password, and email."""
+
     # Check if username already exists
     if await isUserExists(session, username):
         raise HTTPException(status_code=400, detail={"success": False, "message": "Username already exists"})
     
     # Hash the password
     password_hash = hashpw(password.encode('utf-8'), gensalt()).decode('utf-8')
+
     
     # Create and save the new user
     user = User(username=username, email=email, password_hash=password_hash)

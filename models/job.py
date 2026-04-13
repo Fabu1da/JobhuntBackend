@@ -6,6 +6,7 @@ from sqlmodel import SQLModel, Field
 
 class Job(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     title: Optional[str] = None
     company: Optional[str] = None
     location: Optional[str] = None

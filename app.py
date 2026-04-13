@@ -12,7 +12,7 @@ from backend.authentication import login as auth_login, register as auth_registe
 from backend.schemas import ScoreRequest, BatchScoreRequest, AnalyzeCvRequest, LoginRequest, RegisterRequest, RefreshTokenRequest, ValidateRequest, PlanRequest, SubscribeRequest, JobEvaluation
 
 from backend.ai_prompts.prompts import CV_ANALYSIS_PROMPT, CV_VISION_PROMPT, evaluation_jobs
-from backend.job import saveJob
+from backend.job import deleteJob, getAllJobs, saveJob
 
 import httpx
 import os
@@ -554,8 +554,31 @@ async def createJob(request: dict, session: SessionDep):
     """Create a new job entry in the database."""
     print(f"\n=== CREATE JOB REQUEST ===")
     data = request.get("job", {})
+    print(f"Job data received:", data)
     response = await saveJob(session, data  )
     return response
+
+
+@app.get('/api/getAllJobs')
+async def getAllJobsEndpoint(session: SessionDep):
+    """Retrieve all job entries from the database."""
+    print(f"\n=== GET ALL JOBS REQUEST ===")
+    response = await getAllJobs(session)
+    return response
+
+
+@app.delete('/api/deleteJob/{job_id}')
+async def deleteJobEndpoint(job_id: int, session: SessionDep):  
+    """Delete a job entry from the database by its ID."""
+    print(f"\n=== DELETE JOB REQUEST ===")
+    print(f"Job ID to delete: {job_id}")
+    success = await deleteJob(session, job_id)
+    if success:
+        return {"message": f"Job with ID {job_id} deleted successfully."}
+    else:
+        return {"message": f"Job with ID {job_id} not found."}
+    
+
 
 if __name__ == '__main__':
     import uvicorn
