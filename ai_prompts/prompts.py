@@ -1,4 +1,4 @@
-from backend.schemas import JobData, Profile
+from ..schemas import JobData, Profile
 
 
 def evaluation_jobs(profile: Profile, jobs: list[JobData]) -> str:

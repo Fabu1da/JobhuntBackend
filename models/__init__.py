@@ -1,2 +1,2 @@
-from backend.models.job import Job
-from backend.models.users import User
+from .job import Job
+from .users import User

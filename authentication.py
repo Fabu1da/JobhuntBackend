@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-from backend.models.users import User, subscription
+from .models.users import User, subscription
 
 load_dotenv()
 

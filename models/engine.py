@@ -10,8 +10,8 @@ engine = create_engine(sqlite_url, connect_args=connect_args)
 
 def create_db_and_tables():
     # Import models here to avoid circular imports
-    from backend.models.job import Job
-    from backend.models.users import User
+    from .job import Job
+    from .users import User
     SQLModel.metadata.create_all(engine)
 
 

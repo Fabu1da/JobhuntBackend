@@ -4,15 +4,15 @@ from jobspy import scrape_jobs
 from dotenv import load_dotenv
 from sqlmodel import select
 
-from backend.models.users import User, plan
-from backend.models.job import Job
+from .models.users import User, plan
+from .models.job import Job
 from .agent import generate_cover_letter, generate_message_to_recruiter
-from backend.models.engine import SessionDep, create_db_and_tables
-from backend.authentication import login as auth_login, register as auth_register, subscribe, verify_token
-from backend.schemas import ScoreRequest, BatchScoreRequest, AnalyzeCvRequest, LoginRequest, RegisterRequest, RefreshTokenRequest, ValidateRequest, PlanRequest, SubscribeRequest, JobEvaluation
+from .models.engine import SessionDep, create_db_and_tables
+from .authentication import login as auth_login, register as auth_register, subscribe, verify_token
+from .schemas import ScoreRequest, BatchScoreRequest, AnalyzeCvRequest, LoginRequest, RegisterRequest, RefreshTokenRequest, ValidateRequest, PlanRequest, SubscribeRequest, JobEvaluation
 
-from backend.ai_prompts.prompts import CV_ANALYSIS_PROMPT, CV_VISION_PROMPT, evaluation_jobs
-from backend.job import deleteJob, getAllJobs, saveJob
+from .ai_prompts.prompts import CV_ANALYSIS_PROMPT, CV_VISION_PROMPT, evaluation_jobs
+from .job import deleteJob, getAllJobs, saveJob
 
 import httpx
 import os

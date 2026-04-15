@@ -1,5 +1,5 @@
 from sqlmodel import Session, select
-from backend.models.job import Job
+from .models.job import Job
 
 
 
