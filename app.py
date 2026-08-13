@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from jobspy import scrape_jobs
 from dotenv import load_dotenv
 from sqlmodel import select
+
+from .services import retrieve_jobs
 
 from .models.users import User, plan
 from .models.job import Job
@@ -46,26 +47,13 @@ async def get_jobs(query: str, location: str, results: int, posted_within_hours:
     location = location
     results_wanted = results
 
-    sites = ['indeed', 'linkedin', 'glassdoor', 'google', 'bayt']  
-    
+    printed_query = f"Search Term: '{search_term}', Location: '{location}', Results Wanted: {results_wanted}, Posted Within (hours): {posted_within_hours}"
+    print(f"\n=== GET JOBS REQUEST ===")
+    print(printed_query)
+
     try:
-        print(f"Scraping jobs from: {sites}")
-        jobs = scrape_jobs(
-            site_name=sites,
-            search_term=search_term,
-            location=location,
-            results_wanted=results_wanted,
-            hours_old=posted_within_hours,
-            country_indeed=location,
-            description_format='markdown',
-            linkedin_fetch_description=True,
-            proxies=None,
-            ca_cert=None,
-            verbose=1
+        jobs = retrieve_jobs(search_term, location, results_wanted, posted_within_hours)
 
-        )
-
-        print(jobs.head(2))  # Print first 2 jobs for debugging
         
         print(f"Successfully scraped {len(jobs)} jobs")
         
